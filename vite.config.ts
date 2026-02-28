@@ -10,7 +10,7 @@ export default defineConfig({
         target: 'https://api.opensubtitles.com',
         changeOrigin: true,
         configure: (proxy, _options) => {
-          proxy.on('proxyReq', (proxyReq, req, _res) => {
+          proxy.on('proxyReq', (proxyReq) => {
             // Modern browsers strip the User-Agent from fetch overrides for security.
             // OpenSubtitles rigorously requires 'User-Agent: AppName vX.Y' to not return 403
             proxyReq.setHeader('User-Agent', 'EDLMaker v1.0');
