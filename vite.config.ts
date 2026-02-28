@@ -27,6 +27,8 @@ export default defineConfig({
         configure: (proxy, _options) => {
           proxy.on('proxyReq', (proxyReq) => {
             proxyReq.setHeader('User-Agent', 'EDLMaker v1.0');
+            proxyReq.removeHeader('Origin');
+            proxyReq.removeHeader('Referer');
           });
         }
       },
@@ -37,6 +39,8 @@ export default defineConfig({
         configure: (proxy, _options) => {
           proxy.on('proxyReq', (proxyReq) => {
             proxyReq.setHeader('User-Agent', 'EDLMaker v1.0');
+            proxyReq.removeHeader('Origin');
+            proxyReq.removeHeader('Referer');
           });
         }
       }
