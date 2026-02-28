@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Play, Pause, SkipBack, SkipForward, VolumeX, Download, Film, Upload, Trash2 } from 'lucide-react';
-import { parseSrt, getMutesFromSubtitles, resolveConflicts, generateEdlString } from './lib/edl';
+import { parseSrt, getMutesFromSubtitles, resolveConflicts, generateEdlString, generateSrtString } from './lib/edl';
 import type { EdlEntry, SubtitleBlock } from './lib/edl';
 import { searchSubtitles, downloadSubtitle } from './lib/opensubtitles';
 import type { SubtitleMetadata } from './lib/opensubtitles';
@@ -187,6 +187,27 @@ function App() {
     if (videoFile) {
       const baseName = videoFile.name.substring(0, videoFile.name.lastIndexOf('.')) || videoFile.name;
       downloadName = `${baseName}.edl`;
+    }
+
+    a.download = downloadName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadSrt = () => {
+    if (subtitleBlocks.length === 0) return;
+    const srtString = generateSrtString(subtitleBlocks, srtOffset);
+    const blob = new Blob([srtString], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
+
+    let downloadName = 'synced_subtitles.srt';
+    if (srtFileName) {
+      downloadName = `synced_${srtFileName}`;
     }
 
     a.download = downloadName;
@@ -453,15 +474,46 @@ function App() {
                     </div>
                   </>
                 ) : (
-                  <div style={{ background: 'rgba(16, 185, 129, 0.1)', padding: '1rem', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
-                    <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--accent-success)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      ✅ {srtFileName}
-                    </p>
-                    <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                      Automatically generated {autoMutes.length} audio mute points.
-                    </p>
+                  <div className="flex-col gap-3" style={{ background: 'rgba(16, 185, 129, 0.1)', padding: '1rem', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                    <div>
+                      <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--accent-success)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        ✅ {srtFileName}
+                      </p>
+                      <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                        Automatically generated {autoMutes.length} audio mute points.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center justify-between mt-2 pt-3" style={{ borderTop: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                      <div className="flex items-center gap-2" title="Shift subtitles forward or backward in time">
+                        <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Sync (sec):</label>
+                        <input
+                          type="number"
+                          step="0.5"
+                          value={srtOffset}
+                          onChange={(e) => setSrtOffset(parseFloat(e.target.value) || 0)}
+                          style={{
+                            width: '70px',
+                            padding: '0.3rem 0.5rem',
+                            background: 'rgba(15, 23, 42, 0.6)',
+                            border: '1px solid var(--border-color)',
+                            color: 'white',
+                            borderRadius: '4px',
+                            fontSize: '0.9rem'
+                          }}
+                        />
+                      </div>
+                      <button
+                        className="btn btn-outline"
+                        style={{ fontSize: '0.8rem', padding: '0.4rem 0.6rem' }}
+                        onClick={handleDownloadSrt}
+                      >
+                        <Download className="w-3 h-3" /> Save SRT
+                      </button>
+                    </div>
+
                     <button
-                      className="btn btn-outline mt-4 w-full justify-center"
+                      className="btn btn-outline mt-2 w-full justify-center"
                       onClick={() => { setSrtFileName(null); setAutoMutes([]); setSearchResults([]); }}
                       style={{ fontSize: '0.8rem', padding: '0.4rem' }}
                     >
@@ -521,31 +573,9 @@ function App() {
                 </div>
               </div>
 
-              {/* Wordlist Editor & Sync */}
               <div className="card flex-col gap-2">
                 <div className="flex justify-between items-center mb-1">
                   <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Filter Wordlist</h3>
-
-                  {subtitleBlocks.length > 0 && (
-                    <div className="flex items-center gap-2" title="Shift subtitles forward or backward in time">
-                      <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Sync (sec):</label>
-                      <input
-                        type="number"
-                        step="0.5"
-                        value={srtOffset}
-                        onChange={(e) => setSrtOffset(parseFloat(e.target.value) || 0)}
-                        style={{
-                          width: '70px',
-                          padding: '0.2rem 0.5rem',
-                          background: 'rgba(15, 23, 42, 0.6)',
-                          border: '1px solid var(--border-color)',
-                          color: 'white',
-                          borderRadius: '4px',
-                          fontSize: '0.9rem'
-                        }}
-                      />
-                    </div>
-                  )}
                 </div>
 
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
