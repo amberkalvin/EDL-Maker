@@ -9,16 +9,36 @@ export default defineConfig({
       '/api': {
         target: 'https://api.opensubtitles.com',
         changeOrigin: true,
+        configure: (proxy, _options) => {
+          proxy.on('proxyReq', (proxyReq, req, _res) => {
+            // Modern browsers strip the User-Agent from fetch overrides for security.
+            // OpenSubtitles rigorously requires 'User-Agent: AppName vX.Y' to not return 403
+            proxyReq.setHeader('User-Agent', 'EDLMaker v1.0');
+            // Remove browser origins that might trip Cloudflare
+            proxyReq.removeHeader('Origin');
+            proxyReq.removeHeader('Referer');
+          });
+        }
       },
       '/dl': {
         target: 'https://dl.opensubtitles.com',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/dl/, '')
+        rewrite: (path) => path.replace(/^\/dl/, ''),
+        configure: (proxy, _options) => {
+          proxy.on('proxyReq', (proxyReq) => {
+            proxyReq.setHeader('User-Agent', 'EDLMaker v1.0');
+          });
+        }
       },
       '/dl-www': {
         target: 'https://www.opensubtitles.com',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/dl-www/, '')
+        rewrite: (path) => path.replace(/^\/dl-www/, ''),
+        configure: (proxy, _options) => {
+          proxy.on('proxyReq', (proxyReq) => {
+            proxyReq.setHeader('User-Agent', 'EDLMaker v1.0');
+          });
+        }
       }
     },
   },
