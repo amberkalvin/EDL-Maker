@@ -14,6 +14,11 @@ export default defineConfig({
         target: 'https://dl.opensubtitles.com',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/dl/, '')
+      },
+      '/dl-www': {
+        target: 'https://www.opensubtitles.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/dl-www/, '')
       }
     },
   },

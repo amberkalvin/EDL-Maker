@@ -65,6 +65,8 @@ export async function downloadSubtitle(fileId: string): Promise<string> {
         // Proxied via vite.config.ts to avoid CORS on the actual file fetching
         if (downloadUrl.startsWith('https://dl.opensubtitles.com')) {
             downloadUrl = downloadUrl.replace('https://dl.opensubtitles.com', '/dl');
+        } else if (downloadUrl.startsWith('https://www.opensubtitles.com')) {
+            downloadUrl = downloadUrl.replace('https://www.opensubtitles.com', '/dl-www');
         }
 
         // 2. Fetch the actual raw file content (it's often raw text to this direct link)
