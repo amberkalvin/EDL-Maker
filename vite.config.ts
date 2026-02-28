@@ -20,24 +20,26 @@ export default defineConfig({
           });
         }
       },
-      '/dl': {
-        target: 'https://dl.opensubtitles.com',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/dl/, ''),
-        configure: (proxy, _options) => {
-          proxy.on('proxyReq', (proxyReq) => {
-            proxyReq.setHeader('User-Agent', 'EDLMaker v1.0');
-            proxyReq.removeHeader('Origin');
-            proxyReq.removeHeader('Referer');
-          });
-        }
-      },
       '/dl-www': {
         target: 'https://www.opensubtitles.com',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/dl-www/, ''),
         configure: (proxy, _options) => {
           proxy.on('proxyReq', (proxyReq) => {
+            console.log('[dl-www] Proxying to:', proxyReq.path);
+            proxyReq.setHeader('User-Agent', 'EDLMaker v1.0');
+            proxyReq.removeHeader('Origin');
+            proxyReq.removeHeader('Referer');
+          });
+        }
+      },
+      '/dl': {
+        target: 'https://dl.opensubtitles.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/dl/, ''),
+        configure: (proxy, _options) => {
+          proxy.on('proxyReq', (proxyReq) => {
+            console.log('[dl] Proxying to:', proxyReq.path);
             proxyReq.setHeader('User-Agent', 'EDLMaker v1.0');
             proxyReq.removeHeader('Origin');
             proxyReq.removeHeader('Referer');
