@@ -270,39 +270,16 @@ function App() {
               <div className="flex-col gap-2">
                 <div className="relative aspect-video bg-black rounded-lg overflow-hidden flex items-center justify-center">
                   {videoObjectUrl && (
-                    <>
-                      <video
-                        ref={videoRef}
-                        src={videoObjectUrl}
-                        controls={false}
-                        onTimeUpdate={handleTimeUpdate}
-                        onLoadedMetadata={handleLoadedMetadata}
-                        onPlay={() => setIsPlaying(true)}
-                        onPause={() => setIsPlaying(false)}
-                        style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                      />
-
-                      {/* Subtitle Overlay */}
-                      <div className="absolute bottom-8 left-0 right-0 flex justify-center items-center pointer-events-none px-4 pb-2" style={{ zIndex: 10 }}>
-                        {subtitleBlocks
-                          .filter(b => currentTime >= (b.start + srtOffset) && currentTime <= (b.end + srtOffset))
-                          .map(b => (
-                            <div key={b.id} className="text-center px-4 py-1" style={{
-                              background: 'rgba(0, 0, 0, 0.75)',
-                              color: 'white',
-                              fontSize: 'clamp(14px, 2.5vw, 24px)', // Responsive text size
-                              lineHeight: '1.4',
-                              textShadow: '2px 2px 4px black',
-                              borderRadius: '6px',
-                              whiteSpace: 'pre-wrap',
-                              maxWidth: '85%', // Prevent going edge-to-edge
-                              pointerEvents: 'none'
-                            }}>
-                              {b.text}
-                            </div>
-                          ))}
-                      </div>
-                    </>
+                    <video
+                      ref={videoRef}
+                      src={videoObjectUrl}
+                      controls={false}
+                      onTimeUpdate={handleTimeUpdate}
+                      onLoadedMetadata={handleLoadedMetadata}
+                      onPlay={() => setIsPlaying(true)}
+                      onPause={() => setIsPlaying(false)}
+                      style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                    />
                   )}
 
                   {/* Visual marker inside player for Mark IN */}
@@ -316,6 +293,33 @@ function App() {
                     </div>
                   )}
                 </div>
+
+                {/* Subtitle Display Below Player */}
+                {subtitleBlocks.length > 0 && (
+                  <div className="w-full flex justify-center items-center px-4" style={{
+                    minHeight: '80px',
+                    background: 'var(--bg-panel-light)',
+                    borderRadius: '8px',
+                    border: '1px solid var(--border-color)',
+                    marginTop: '0.5rem'
+                  }}>
+                    {subtitleBlocks
+                      .filter(b => currentTime >= (b.start + srtOffset) && currentTime <= (b.end + srtOffset))
+                      .map(b => (
+                        <div key={b.id} className="text-center w-full" style={{
+                          color: 'white',
+                          fontSize: 'clamp(16px, 1.5vw, 24px)', // Slightly more readable text outside video context
+                          lineHeight: '1.4',
+                          whiteSpace: 'pre-wrap'
+                        }}>
+                          {b.text}
+                        </div>
+                      ))}
+                    {subtitleBlocks.filter(b => currentTime >= (b.start + srtOffset) && currentTime <= (b.end + srtOffset)).length === 0 && (
+                      <span style={{ color: 'var(--text-secondary)', fontStyle: 'italic', fontSize: '0.9rem' }}>...</span>
+                    )}
+                  </div>
+                )}
 
                 {duration > 0 && (
                   <div className="mt-4 flex items-center gap-2">
