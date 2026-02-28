@@ -216,15 +216,6 @@ function App() {
             <p style={{ color: 'var(--text-secondary)', margin: 0, fontSize: '0.95rem' }}>Auto-Mute & Visual Scrubber</p>
           </div>
         </div>
-
-        <button
-          className="btn btn-primary"
-          disabled={resolvedEntries.length === 0}
-          onClick={handleDownloadEdl}
-        >
-          <Download className="w-4 h-4" />
-          Export .EDL ({resolvedEntries.length})
-        </button>
       </header>
 
       {!videoFile ? (
@@ -260,9 +251,21 @@ function App() {
           {/* LEFT COLUMN: Main Video Player & TimeControls */}
           <div className="flex-col gap-4">
             <div className="card">
-              <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-                <Film className="text-blue-400" /> Video Editor
-              </h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold flex items-center gap-2 m-0">
+                  <Film className="text-blue-400" /> Video Editor
+                </h2>
+
+                <button
+                  className="btn btn-primary"
+                  disabled={resolvedEntries.length === 0}
+                  onClick={handleDownloadEdl}
+                  style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}
+                >
+                  <Download className="w-4 h-4" />
+                  Export .EDL ({resolvedEntries.length})
+                </button>
+              </div>
 
               <div className="flex-col gap-2">
                 <div className="relative aspect-video bg-black rounded-lg overflow-hidden flex items-center justify-center">
@@ -280,18 +283,20 @@ function App() {
                       />
 
                       {/* Subtitle Overlay */}
-                      <div className="absolute bottom-12 left-0 right-0 flex justify-center pointer-events-none px-8">
+                      <div className="absolute bottom-8 left-0 right-0 flex justify-center items-center pointer-events-none px-4 pb-2" style={{ zIndex: 10 }}>
                         {subtitleBlocks
                           .filter(b => currentTime >= (b.start + srtOffset) && currentTime <= (b.end + srtOffset))
                           .map(b => (
                             <div key={b.id} className="text-center px-4 py-1" style={{
                               background: 'rgba(0, 0, 0, 0.75)',
                               color: 'white',
-                              fontSize: 'calc(14px + 1vw)',
+                              fontSize: 'clamp(14px, 2.5vw, 24px)', // Responsive text size
+                              lineHeight: '1.4',
                               textShadow: '2px 2px 4px black',
                               borderRadius: '6px',
                               whiteSpace: 'pre-wrap',
-                              maxWidth: '100%'
+                              maxWidth: '85%', // Prevent going edge-to-edge
+                              pointerEvents: 'none'
                             }}>
                               {b.text}
                             </div>
@@ -436,10 +441,12 @@ function App() {
                     <div style={{ textAlign: 'center', margin: '0.5rem 0' }}>
                       <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>— OR —</span>
                     </div>
-                    <label className="btn btn-outline w-full cursor-pointer justify-center">
-                      Load Local .SRT
-                      <input type="file" accept=".srt" style={{ display: 'none' }} onChange={handleLocalSrtLoad} />
-                    </label>
+                    <div className="flex justify-center mt-2">
+                      <label className="btn btn-outline cursor-pointer">
+                        Load Local .SRT
+                        <input type="file" accept=".srt" style={{ display: 'none' }} onChange={handleLocalSrtLoad} />
+                      </label>
+                    </div>
                   </>
                 ) : (
                   <div style={{ background: 'rgba(16, 185, 129, 0.1)', padding: '1rem', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
