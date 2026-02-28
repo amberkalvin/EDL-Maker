@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Play, Pause, SkipBack, SkipForward, VolumeX, Download, Film, Upload, Trash2 } from 'lucide-react';
-import { parseSrtForBadWords, resolveConflicts, generateEdlString } from './lib/edl';
-import type { EdlEntry } from './lib/edl';
+import { parseSrt, getMutesFromSubtitles, resolveConflicts, generateEdlString } from './lib/edl';
+import type { EdlEntry, SubtitleBlock } from './lib/edl';
 import { searchSubtitles, downloadSubtitle } from './lib/opensubtitles';
 import type { SubtitleMetadata } from './lib/opensubtitles';
 import './index.css';
@@ -24,6 +24,9 @@ function App() {
   const [srtFileName, setSrtFileName] = useState<string | null>(null);
   const [wordlistText, setWordlistText] = useState(DEFAULT_WORDLIST.join('\n'));
 
+  const [subtitleBlocks, setSubtitleBlocks] = useState<SubtitleBlock[]>([]);
+  const [srtOffset, setSrtOffset] = useState<number>(0);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<SubtitleMetadata[]>([]);
@@ -31,6 +34,12 @@ function App() {
   const [isDownloading, setIsDownloading] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    // Generate mutes when subtitle blocks, wordlist, or offset changes
+    const currentList = wordlistText.split('\n').map(w => w.trim()).filter(w => w);
+    setAutoMutes(getMutesFromSubtitles(subtitleBlocks, currentList, srtOffset));
+  }, [subtitleBlocks, wordlistText, srtOffset]);
 
   useEffect(() => {
     // Generate the final merged list whenever cuts or mutes change
@@ -48,6 +57,8 @@ function App() {
       setAutoMutes([]);
       setMarkIn(null);
       setSrtFileName(null);
+      setSubtitleBlocks([]);
+      setSrtOffset(0);
       setSearchResults([]);
       setSearchQuery('');
       setSearchError(null);
@@ -119,9 +130,7 @@ function App() {
     const reader = new FileReader();
     reader.onload = (e) => {
       const content = e.target?.result as string;
-      const currentList = wordlistText.split('\n').map(w => w.trim()).filter(w => w);
-      const mutes = parseSrtForBadWords(content, currentList);
-      setAutoMutes(mutes);
+      setSubtitleBlocks(parseSrt(content));
     };
     reader.readAsText(file);
   };
@@ -147,9 +156,7 @@ function App() {
     try {
       const textContent = await downloadSubtitle(sub.id);
       setSrtFileName(sub.fileName || 'OpenSubtitles Download');
-      const currentList = wordlistText.split('\n').map(w => w.trim()).filter(w => w);
-      const mutes = parseSrtForBadWords(textContent, currentList);
-      setAutoMutes(mutes);
+      setSubtitleBlocks(parseSrt(textContent));
       setSearchResults([]); // close results
     } catch (err: any) {
       setSearchError(err.message || "Failed to download subtitle file.");
@@ -250,263 +257,306 @@ function App() {
         </div>
       ) : (
         <div className="app-grid">
-          {/* Main Player Column */}
+          {/* LEFT COLUMN: Main Video Player & TimeControls */}
           <div className="flex-col gap-4">
-            <div className="card" style={{ padding: '1rem' }}>
-              <div
-                style={{
-                  width: '100%',
-                  aspectRatio: '16/9',
-                  backgroundColor: '#000',
-                  borderRadius: '8px',
-                  overflow: 'hidden',
-                  position: 'relative'
-                }}
-              >
-                {videoObjectUrl && (
-                  <video
-                    ref={videoRef}
-                    src={videoObjectUrl}
-                    controls={false} // Custom controls below
-                    onTimeUpdate={handleTimeUpdate}
-                    onLoadedMetadata={handleLoadedMetadata}
-                    onPlay={() => setIsPlaying(true)}
-                    onPause={() => setIsPlaying(false)}
-                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                  />
-                )}
-                {/* Visual marker inside player for Mark IN */}
-                {markIn !== null && (
-                  <div style={{
-                    position: 'absolute', top: 10, right: 10,
-                    background: 'var(--accent-danger)', color: 'white',
-                    padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold'
-                  }}>
-                    IN: {formatTime(markIn)}
-                  </div>
-                )}
-              </div>
+            <div className="card">
+              <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                <Film className="text-blue-400" /> Video Editor
+              </h2>
 
-              {duration > 0 && (
-                <div className="mt-4 flex items-center gap-2">
-                  <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontFamily: 'monospace' }}>
-                    {formatTime(currentTime)}
-                  </span>
-                  <input
-                    type="range"
-                    min="0"
-                    max={duration}
-                    step="0.1"
-                    value={currentTime}
-                    onChange={handleScrub}
-                    style={{ flexGrow: 1, cursor: 'pointer', accentColor: 'var(--accent-primary)' }}
-                  />
-                  <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontFamily: 'monospace' }}>
-                    {formatTime(duration)}
-                  </span>
-                </div>
-              )}
+              <div className="flex-col gap-2">
+                <div className="relative aspect-video bg-black rounded-lg overflow-hidden flex items-center justify-center">
+                  {videoObjectUrl && (
+                    <>
+                      <video
+                        ref={videoRef}
+                        src={videoObjectUrl}
+                        controls={false}
+                        onTimeUpdate={handleTimeUpdate}
+                        onLoadedMetadata={handleLoadedMetadata}
+                        onPlay={() => setIsPlaying(true)}
+                        onPause={() => setIsPlaying(false)}
+                        style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                      />
 
-              <div className="flex items-center justify-between mt-4">
-                <div className="flex items-center gap-2">
-                  <button className="btn-icon" onClick={() => jumpTime(-5)} title="Jump Back 5s"><SkipBack className="w-5 h-5" /></button>
-                  <button className="btn-icon" onClick={togglePlay} title="Play/Pause">
-                    {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
-                  </button>
-                  <button className="btn-icon" onClick={() => jumpTime(5)} title="Jump Forward 5s"><SkipForward className="w-5 h-5" /></button>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    className="btn btn-outline"
-                    onClick={handleMarkIn}
-                    style={{
-                      borderColor: markIn !== null ? 'var(--accent-primary)' : 'var(--text-secondary)',
-                      color: markIn !== null ? 'var(--text-primary)' : 'var(--text-secondary)',
-                      padding: '0.5rem 1rem'
-                    }}
-                  >
-                    [ Mark IN
-                  </button>
-                  <button
-                    className="btn btn-outline"
-                    onClick={handleMarkOut}
-                    disabled={markIn === null}
-                    style={{
-                      borderColor: markIn !== null ? 'var(--accent-danger)' : 'var(--text-secondary)',
-                      color: markIn !== null ? 'var(--accent-danger)' : 'var(--text-secondary)',
-                      padding: '0.5rem 1rem'
-                    }}
-                  >
-                    Mark OUT ]
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Sidebar Column */}
-          <div className="flex-col gap-4">
-            {/* Subtitles & Automation */}
-            <div className="card flex-col gap-4">
-              <h3 className="flex items-center justify-between" style={{ fontSize: '1.1rem', margin: 0 }}>
-                <span className="flex items-center gap-2">
-                  <VolumeX className="w-5 h-5 text-emerald-500" />
-                  Auto-Mute Subtitles
-                </span>
-                {srtFileName && <span style={{ fontSize: '0.8rem', color: 'var(--accent-success)' }}>{autoMutes.length} Mutes</span>}
-              </h3>
-
-              {!srtFileName ? (
-                <>
-                  <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                    Search OpenSubtitles or load a local .srt file to automatically generate audio mutes.
-                  </p>
-
-                  {searchError && (
-                    <div style={{ background: 'rgba(239, 68, 68, 0.1)', color: 'var(--accent-danger)', padding: '0.5rem', borderRadius: '4px', fontSize: '0.85rem' }}>
-                      {searchError}
-                    </div>
+                      {/* Subtitle Overlay */}
+                      <div className="absolute bottom-12 left-0 right-0 flex justify-center pointer-events-none px-8">
+                        {subtitleBlocks
+                          .filter(b => currentTime >= (b.start + srtOffset) && currentTime <= (b.end + srtOffset))
+                          .map(b => (
+                            <div key={b.id} className="text-center px-4 py-1" style={{
+                              background: 'rgba(0, 0, 0, 0.75)',
+                              color: 'white',
+                              fontSize: 'calc(14px + 1vw)',
+                              textShadow: '2px 2px 4px black',
+                              borderRadius: '6px',
+                              whiteSpace: 'pre-wrap',
+                              maxWidth: '100%'
+                            }}>
+                              {b.text}
+                            </div>
+                          ))}
+                      </div>
+                    </>
                   )}
 
-                  <div className="flex gap-2">
+                  {/* Visual marker inside player for Mark IN */}
+                  {markIn !== null && (
+                    <div style={{
+                      position: 'absolute', top: 10, right: 10,
+                      background: 'var(--accent-danger)', color: 'white',
+                      padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold'
+                    }}>
+                      IN: {formatTime(markIn)}
+                    </div>
+                  )}
+                </div>
+
+                {duration > 0 && (
+                  <div className="mt-4 flex items-center gap-2">
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontFamily: 'monospace' }}>
+                      {formatTime(currentTime)}
+                    </span>
                     <input
-                      type="text"
-                      placeholder="Movie Title..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleSearchSubtitles()}
+                      type="range"
+                      min="0"
+                      max={duration}
+                      step="0.1"
+                      value={currentTime}
+                      onChange={handleScrub}
+                      style={{ flexGrow: 1, cursor: 'pointer', accentColor: 'var(--accent-primary)' }}
                     />
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontFamily: 'monospace' }}>
+                      {formatTime(duration)}
+                    </span>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between mt-4">
+                  <div className="flex items-center gap-2">
+                    <button className="btn-icon" onClick={() => jumpTime(-5)} title="Jump Back 5s"><SkipBack className="w-5 h-5" /></button>
+                    <button className="btn-icon" onClick={togglePlay} title="Play/Pause">
+                      {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
+                    </button>
+                    <button className="btn-icon" onClick={() => jumpTime(5)} title="Jump Forward 5s"><SkipForward className="w-5 h-5" /></button>
+                  </div>
+
+                  <div className="flex items-center gap-2">
                     <button
-                      className="btn btn-primary"
-                      onClick={handleSearchSubtitles}
-                      disabled={isSearching || !searchQuery}
+                      className="btn btn-outline"
+                      onClick={handleMarkIn}
+                      style={{
+                        borderColor: markIn !== null ? 'var(--accent-primary)' : 'var(--text-secondary)',
+                        color: markIn !== null ? 'var(--text-primary)' : 'var(--text-secondary)',
+                        padding: '0.5rem 1rem'
+                      }}
                     >
-                      {isSearching ? '...' : 'Search'}
+                      [ Mark IN
+                    </button>
+                    <button
+                      className="btn btn-outline"
+                      onClick={handleMarkOut}
+                      disabled={markIn === null}
+                      style={{
+                        borderColor: markIn !== null ? 'var(--accent-danger)' : 'var(--text-secondary)',
+                        color: markIn !== null ? 'var(--accent-danger)' : 'var(--text-secondary)',
+                        padding: '0.5rem 1rem'
+                      }}
+                    >
+                      Mark OUT ]
                     </button>
                   </div>
-
-                  {searchResults.length > 0 && (
-                    <div className="flex-col gap-2 mt-2" style={{ maxHeight: '200px', overflowY: 'auto' }}>
-                      {searchResults.map((sub, i) => (
-                        <div key={i} className="card flex items-center justify-between" style={{ padding: '0.75rem', margin: 0 }}>
-                          <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '180px' }}>
-                            <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>{sub.fileName}</span>
-                            <br />
-                            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{sub.downloads} DLs | {sub.language}</span>
-                          </div>
-                          <button
-                            className="btn btn-outline"
-                            style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
-                            onClick={() => handleDownloadAndApply(sub)}
-                            disabled={isDownloading}
-                          >
-                            Use
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <div style={{ textAlign: 'center', margin: '0.5rem 0' }}>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>— OR —</span>
-                  </div>
-                  <label className="btn btn-outline w-full cursor-pointer justify-center">
-                    Load Local .SRT
-                    <input type="file" accept=".srt" style={{ display: 'none' }} onChange={handleLocalSrtLoad} />
-                  </label>
-                </>
-              ) : (
-                <div style={{ background: 'rgba(16, 185, 129, 0.1)', padding: '1rem', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
-                  <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--accent-success)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    ✅ {srtFileName}
-                  </p>
-                  <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                    Automatically generated {autoMutes.length} audio mute points.
-                  </p>
-                  <button
-                    className="btn btn-outline mt-4 w-full justify-center"
-                    onClick={() => { setSrtFileName(null); setAutoMutes([]); setSearchResults([]); }}
-                    style={{ fontSize: '0.8rem', padding: '0.4rem' }}
-                  >
-                    Clear & Load Different
-                  </button>
                 </div>
-              )}
+              </div>
             </div>
 
-            {/* EDL Entries List */}
-            <div className="card flex-col" style={{ flexGrow: 1, maxHeight: 'calc(100vh - 400px)', overflow: 'hidden' }}>
-              <div className="flex items-center justify-between mb-4">
-                <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Resolved EDL</h3>
-                <span style={{ fontSize: '0.8rem', background: 'var(--bg-panel-light)', padding: '2px 8px', borderRadius: '12px' }}>
-                  {resolvedEntries.length} Total
-                </span>
-              </div>
+            {/* Sidebar Column */}
+            <div className="flex-col gap-4">
+              {/* Subtitles & Automation */}
+              <div className="card flex-col gap-4">
+                <h3 className="flex items-center justify-between" style={{ fontSize: '1.1rem', margin: 0 }}>
+                  <span className="flex items-center gap-2">
+                    <VolumeX className="w-5 h-5 text-emerald-500" />
+                    Auto-Mute Subtitles
+                  </span>
+                  {srtFileName && <span style={{ fontSize: '0.8rem', color: 'var(--accent-success)' }}>{autoMutes.length} Mutes</span>}
+                </h3>
 
-              <div className="flex-col gap-2" style={{ overflowY: 'auto', paddingRight: '4px' }}>
-                {resolvedEntries.length === 0 ? (
-                  <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', textAlign: 'center', padding: '2rem 0' }}>
-                    No cuts or mutes added yet.
-                  </div>
-                ) : (
-                  resolvedEntries.map((entry, idx) => (
-                    <div key={idx} className="flex items-center justify-between" style={{
-                      padding: '0.5rem 0.75rem',
-                      background: entry.action === 0 ? 'rgba(239, 68, 68, 0.1)' : 'rgba(59, 130, 246, 0.1)',
-                      borderLeft: `3px solid ${entry.action === 0 ? 'var(--accent-danger)' : 'var(--accent-primary)'}`,
-                      borderRadius: '4px'
-                    }}>
-                      <div className="flex-col">
-                        <span style={{ fontSize: '0.8rem', fontWeight: 600, color: entry.action === 0 ? 'var(--accent-danger)' : 'var(--accent-primary)' }}>
-                          {entry.action === 0 ? 'CUT (Video)' : 'MUTE (Audio)'}
-                        </span>
-                        <span style={{ fontSize: '0.9rem', fontFamily: 'monospace' }}>
-                          {formatTime(entry.start)} - {formatTime(entry.end)}
-                        </span>
+                {!srtFileName ? (
+                  <>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                      Search OpenSubtitles or load a local .srt file to automatically generate audio mutes.
+                    </p>
+
+                    {searchError && (
+                      <div style={{ background: 'rgba(239, 68, 68, 0.1)', color: 'var(--accent-danger)', padding: '0.5rem', borderRadius: '4px', fontSize: '0.85rem' }}>
+                        {searchError}
                       </div>
+                    )}
 
-                      {/* Only allow deleting manual cuts (action 0) for now */}
-                      {entry.action === 0 && (
-                        <button
-                          className="btn-icon"
-                          onClick={() => {
-                            // Find the original manual cut and remove it
-                            const manualIdx = manualCuts.findIndex(c => c.start === entry.start && c.end === entry.end);
-                            if (manualIdx >= 0) removeEntry(manualIdx, 'cut');
-                          }}
-                        >
-                          <Trash2 className="w-4 h-4 text-red-400" />
-                        </button>
-                      )}
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Movie Title..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleSearchSubtitles()}
+                      />
+                      <button
+                        className="btn btn-primary"
+                        onClick={handleSearchSubtitles}
+                        disabled={isSearching || !searchQuery}
+                      >
+                        {isSearching ? '...' : 'Search'}
+                      </button>
                     </div>
-                  ))
+
+                    {searchResults.length > 0 && (
+                      <div className="flex-col gap-2 mt-2" style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                        {searchResults.map((sub, i) => (
+                          <div key={i} className="card flex items-center justify-between" style={{ padding: '0.75rem', margin: 0 }}>
+                            <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '180px' }}>
+                              <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>{sub.fileName}</span>
+                              <br />
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{sub.downloads} DLs | {sub.language}</span>
+                            </div>
+                            <button
+                              className="btn btn-outline"
+                              style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                              onClick={() => handleDownloadAndApply(sub)}
+                              disabled={isDownloading}
+                            >
+                              Use
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div style={{ textAlign: 'center', margin: '0.5rem 0' }}>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>— OR —</span>
+                    </div>
+                    <label className="btn btn-outline w-full cursor-pointer justify-center">
+                      Load Local .SRT
+                      <input type="file" accept=".srt" style={{ display: 'none' }} onChange={handleLocalSrtLoad} />
+                    </label>
+                  </>
+                ) : (
+                  <div style={{ background: 'rgba(16, 185, 129, 0.1)', padding: '1rem', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                    <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--accent-success)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      ✅ {srtFileName}
+                    </p>
+                    <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                      Automatically generated {autoMutes.length} audio mute points.
+                    </p>
+                    <button
+                      className="btn btn-outline mt-4 w-full justify-center"
+                      onClick={() => { setSrtFileName(null); setAutoMutes([]); setSearchResults([]); }}
+                      style={{ fontSize: '0.8rem', padding: '0.4rem' }}
+                    >
+                      Clear & Load Different
+                    </button>
+                  </div>
                 )}
               </div>
-            </div>
 
-            {/* Wordlist Editor */}
-            <div className="card flex-col gap-2">
-              <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Filter Wordlist</h3>
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                One word per line. If you change this, reload the subtitles.
-              </p>
-              <textarea
-                className="blur-until-hover"
-                value={wordlistText}
-                onChange={(e) => setWordlistText(e.target.value)}
-                style={{
-                  width: '100%',
-                  height: '100px',
-                  background: 'var(--bg-panel-light)',
-                  border: '1px solid var(--border-color)',
-                  color: 'var(--text-primary)',
-                  borderRadius: '4px',
-                  padding: '0.5rem',
-                  fontSize: '0.9rem',
-                  resize: 'vertical'
-                }}
-              />
+              {/* EDL Entries List */}
+              <div className="card flex-col" style={{ flexGrow: 1, maxHeight: 'calc(100vh - 400px)', overflow: 'hidden' }}>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Resolved EDL</h3>
+                  <span style={{ fontSize: '0.8rem', background: 'var(--bg-panel-light)', padding: '2px 8px', borderRadius: '12px' }}>
+                    {resolvedEntries.length} Total
+                  </span>
+                </div>
+
+                <div className="flex-col gap-2" style={{ overflowY: 'auto', paddingRight: '4px' }}>
+                  {resolvedEntries.length === 0 ? (
+                    <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', textAlign: 'center', padding: '2rem 0' }}>
+                      No cuts or mutes added yet.
+                    </div>
+                  ) : (
+                    resolvedEntries.map((entry, idx) => (
+                      <div key={idx} className="flex items-center justify-between" style={{
+                        padding: '0.5rem 0.75rem',
+                        background: entry.action === 0 ? 'rgba(239, 68, 68, 0.1)' : 'rgba(59, 130, 246, 0.1)',
+                        borderLeft: `3px solid ${entry.action === 0 ? 'var(--accent-danger)' : 'var(--accent-primary)'}`,
+                        borderRadius: '4px'
+                      }}>
+                        <div className="flex-col">
+                          <span style={{ fontSize: '0.8rem', fontWeight: 600, color: entry.action === 0 ? 'var(--accent-danger)' : 'var(--accent-primary)' }}>
+                            {entry.action === 0 ? 'CUT (Video)' : 'MUTE (Audio)'}
+                          </span>
+                          <span style={{ fontSize: '0.9rem', fontFamily: 'monospace' }}>
+                            {formatTime(entry.start)} - {formatTime(entry.end)}
+                          </span>
+                        </div>
+
+                        {/* Only allow deleting manual cuts (action 0) for now */}
+                        {entry.action === 0 && (
+                          <button
+                            className="btn-icon"
+                            onClick={() => {
+                              // Find the original manual cut and remove it
+                              const manualIdx = manualCuts.findIndex(c => c.start === entry.start && c.end === entry.end);
+                              if (manualIdx >= 0) removeEntry(manualIdx, 'cut');
+                            }}
+                          >
+                            <Trash2 className="w-4 h-4 text-red-400" />
+                          </button>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Wordlist Editor & Sync */}
+              <div className="card flex-col gap-2">
+                <div className="flex justify-between items-center mb-1">
+                  <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Filter Wordlist</h3>
+
+                  {subtitleBlocks.length > 0 && (
+                    <div className="flex items-center gap-2" title="Shift subtitles forward or backward in time">
+                      <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Sync (sec):</label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        value={srtOffset}
+                        onChange={(e) => setSrtOffset(parseFloat(e.target.value) || 0)}
+                        style={{
+                          width: '70px',
+                          padding: '0.2rem 0.5rem',
+                          background: 'rgba(15, 23, 42, 0.6)',
+                          border: '1px solid var(--border-color)',
+                          color: 'white',
+                          borderRadius: '4px',
+                          fontSize: '0.9rem'
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                  One word per line.
+                </p>
+                <textarea
+                  className="blur-until-hover"
+                  value={wordlistText}
+                  onChange={(e) => setWordlistText(e.target.value)}
+                  style={{
+                    width: '100%',
+                    height: '100px',
+                    background: 'var(--bg-panel-light)',
+                    border: '1px solid var(--border-color)',
+                    color: 'var(--text-primary)',
+                    borderRadius: '4px',
+                    padding: '0.5rem',
+                    fontSize: '0.9rem',
+                    resize: 'vertical'
+                  }}
+                />
+              </div>
             </div>
           </div>
         </div>

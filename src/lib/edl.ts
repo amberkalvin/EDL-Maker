@@ -4,6 +4,13 @@ export interface EdlEntry {
     action: number;
 }
 
+export interface SubtitleBlock {
+    id: number;
+    start: number;
+    end: number;
+    text: string;
+}
+
 export function parseTimeToSeconds(timeStr: string): number {
     const str = timeStr.trim();
     if (!str) return 0;
@@ -100,24 +107,40 @@ export function resolveConflicts(entries: EdlEntry[]): EdlEntry[] {
     return finalEntries.sort((a, b) => a.start - b.start);
 }
 
-export function parseSrtForBadWords(srtContent: string, wordlist: string[]): EdlEntry[] {
-    const entries: EdlEntry[] = [];
-    if (!srtContent || wordlist.length === 0) return entries;
+export function parseSrt(srtContent: string): SubtitleBlock[] {
+    const blocks: SubtitleBlock[] = [];
+    if (!srtContent) return blocks;
 
     // Basic SRT block regex: [index]\n[start] --> [end]\n[text]
     const pattern = /\d+\r?\n(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})\r?\n([\s\S]*?)(?=\r?\n\r?\n|$)/g;
 
     let match;
+    let id = 1;
     while ((match = pattern.exec(srtContent)) !== null) {
         const [, startStr, endStr, text] = match;
-        const cleanText = text.replace(/\r?\n/g, ' ').toLowerCase();
+        const cleanText = text.replace(/\r?\n/g, ' ').trim();
 
-        const hasBadWord = wordlist.some(word => cleanText.includes(word.toLowerCase()));
+        blocks.push({
+            id: id++,
+            start: parseTimeToSeconds(startStr),
+            end: parseTimeToSeconds(endStr),
+            text: cleanText
+        });
+    }
 
+    return blocks;
+}
+
+export function getMutesFromSubtitles(blocks: SubtitleBlock[], wordlist: string[], offsetSec: number = 0): EdlEntry[] {
+    const entries: EdlEntry[] = [];
+    if (blocks.length === 0 || wordlist.length === 0) return entries;
+
+    for (const block of blocks) {
+        const hasBadWord = wordlist.some(word => block.text.toLowerCase().includes(word.toLowerCase()));
         if (hasBadWord) {
             entries.push({
-                start: parseTimeToSeconds(startStr),
-                end: parseTimeToSeconds(endStr),
+                start: Math.max(0, block.start + offsetSec),
+                end: Math.max(0, block.end + offsetSec),
                 action: 1 // Mute
             });
         }
